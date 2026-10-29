@@ -3,8 +3,7 @@
 An n8n workflow that lets me log every sent application from Telegram in about 15 seconds instead of 2-3 minutes of manual spreadsheet work.
 
 Personal tool built for my own workflow and used daily. Not a client deployment.
-
-<n8n workflow screenshot width="1348" height="806" alt="Знімок екрана 2026-10-16 190555" src="https://github.com/user-attachments/assets/832f1534-88f6-4845-a50e-ee6c8dfea7f1" />
+<img width="1348" height="806" alt="n8n workflow screenshot" src="https://github.com/user-attachments/assets/7e8958a0-b6f1-44d7-8a4e-9abc9aae4a9f" />
 
 ## Problem
 
