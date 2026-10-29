@@ -4,6 +4,8 @@ An n8n workflow that lets me log every sent application from Telegram in about 1
 
 Personal tool built for my own workflow and used daily. Not a client deployment.
 
+<n8n workflow screenshot width="1348" height="806" alt="Знімок екрана 2026-10-16 190555" src="https://github.com/user-attachments/assets/832f1534-88f6-4845-a50e-ee6c8dfea7f1" />
+
 ## Problem
 
 A monetization course I am taking requires logging every freelance and job application in a Google Sheet: date, platform, type, requirements, cover letter text, and a screenshot of the response. Filling it by hand after each application was slow and easy to skip.
