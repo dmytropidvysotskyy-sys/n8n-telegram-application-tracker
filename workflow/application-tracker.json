@@ -1,0 +1,1296 @@
+{
+  "name": "Application Tracker (Telegram to Google Sheets)",
+  "nodes": [
+    {
+      "parameters": {
+        "updates": [
+          "message"
+        ],
+        "additionalFields": {
+          "userIds": "YOUR_TELEGRAM_USER_ID"
+        }
+      },
+      "id": "25b1ad41-a74d-4074-85a5-053cb3937cd6",
+      "name": "Telegram Trigger",
+      "type": "n8n-nodes-base.telegramTrigger",
+      "typeVersion": 1.5,
+      "position": [
+        240,
+        928
+      ],
+      "credentials": {
+        "telegramApi": {
+          "id": "YOUR_CREDENTIAL_ID",
+          "name": "Telegram account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "rules": {
+          "values": [
+            {
+              "conditions": {
+                "options": {
+                  "caseSensitive": true,
+                  "leftValue": "",
+                  "typeValidation": "strict",
+                  "version": 2
+                },
+                "conditions": [
+                  {
+                    "id": "r1c1",
+                    "leftValue": "={{ !!$json.message.reply_to_message }}",
+                    "operator": {
+                      "operation": "true",
+                      "singleValue": true,
+                      "type": "boolean"
+                    },
+                    "rightValue": ""
+                  },
+                  {
+                    "id": "r1c2",
+                    "leftValue": "={{ !!($json.message.photo || $json.message.document) }}",
+                    "operator": {
+                      "operation": "true",
+                      "singleValue": true,
+                      "type": "boolean"
+                    },
+                    "rightValue": ""
+                  }
+                ],
+                "combinator": "and"
+              },
+              "renameOutput": true,
+              "outputKey": "Скрін"
+            },
+            {
+              "conditions": {
+                "options": {
+                  "caseSensitive": true,
+                  "leftValue": "",
+                  "typeValidation": "strict",
+                  "version": 2
+                },
+                "conditions": [
+                  {
+                    "id": "r2c1",
+                    "leftValue": "={{ !!$json.message.reply_to_message }}",
+                    "operator": {
+                      "operation": "true",
+                      "singleValue": true,
+                      "type": "boolean"
+                    },
+                    "rightValue": ""
+                  },
+                  {
+                    "id": "r2c2",
+                    "leftValue": "={{ !!$json.message.text }}",
+                    "operator": {
+                      "operation": "true",
+                      "singleValue": true,
+                      "type": "boolean"
+                    },
+                    "rightValue": ""
+                  }
+                ],
+                "combinator": "and"
+              },
+              "renameOutput": true,
+              "outputKey": "CL"
+            },
+            {
+              "conditions": {
+                "options": {
+                  "caseSensitive": true,
+                  "leftValue": "",
+                  "typeValidation": "strict",
+                  "version": 2
+                },
+                "conditions": [
+                  {
+                    "id": "r3c1",
+                    "leftValue": "={{ !!$json.message.text }}",
+                    "operator": {
+                      "operation": "true",
+                      "singleValue": true,
+                      "type": "boolean"
+                    },
+                    "rightValue": ""
+                  },
+                  {
+                    "id": "r3c2",
+                    "leftValue": "={{ !!$json.message.reply_to_message }}",
+                    "operator": {
+                      "operation": "false",
+                      "singleValue": true,
+                      "type": "boolean"
+                    },
+                    "rightValue": ""
+                  },
+                  {
+                    "id": "r3c3",
+                    "leftValue": "={{ $json.message.text }}",
+                    "operator": {
+                      "name": "filter.operator.notStartsWith",
+                      "operation": "notStartsWith",
+                      "type": "string"
+                    },
+                    "rightValue": "/"
+                  }
+                ],
+                "combinator": "and"
+              },
+              "renameOutput": true,
+              "outputKey": "Нова заявка"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "a513d7fa-2f8f-4d86-bcd6-a3c35ffb6605",
+      "name": "Route Message Type",
+      "type": "n8n-nodes-base.switch",
+      "typeVersion": 3.2,
+      "position": [
+        464,
+        912
+      ]
+    },
+    {
+      "parameters": {
+        "mode": "runOnceForEachItem",
+        "jsCode": "const text = String($json.message.text || '').trim();\nconst match = text.match(/^(\\S+)\\s+(\\S+)(?:\\s+([\\s\\S]*))?$/);\n\nconst platforms = {\n  up: 'Upwork',\n  fh: 'Freelancehunt',\n  li: 'LinkedIn',\n  dou: 'DOU',\n};\nconst types = {\n  'п': 'Відгук на проєкт',\n  'в': 'Відгук на вакансію',\n  'о': 'Персональний офер',\n};\n\nconst zone = 'Europe/Lisbon';\nconst today = $now.setZone(zone);\n\nif (!match) {\n  return { json: { valid: false, error: 'Немає мітки. Формат: платформа тип [дата] текст, наприклад: up п ...', platform: '', type: '', date: '', dateIso: '', requirements: '' } };\n}\n\nconst platformKey = match[1].toLowerCase();\nconst typeKey = match[2].toLowerCase();\nconst platform = platforms[platformKey] || match[1];\nconst type = types[typeKey];\n\nif (!type) {\n  return { json: { valid: false, error: 'Нерозпізнаний тип \"' + match[2] + '\". Дозволені: п (проєкт), в (вакансія), о (офер)', platform, type: '', date: '', dateIso: '', requirements: (match[3] || '').trim() } };\n}\n\nlet date = today.toFormat('dd.MM');\nlet dateIso = today.toFormat('yyyy-MM-dd');\nlet requirements = (match[3] || '').trim();\n\nconst next = requirements.match(/^(\\S+)(?:\\s+([\\s\\S]*))?$/);\nif (next) {\n  const token = next[1];\n  const dm = token.match(/^(\\d{1,2})\\.(\\d{1,2})$/);\n  if (dm) {\n    const candidate = DateTime.fromObject({ year: today.year, month: Number(dm[2]), day: Number(dm[1]) }, { zone });\n    if (candidate.isValid) {\n      date = candidate.toFormat('dd.MM');\n      dateIso = candidate.toFormat('yyyy-MM-dd');\n      requirements = (next[2] || '').trim();\n    }\n  } else if (token.toLowerCase() === 'вчора') {\n    const yesterday = today.minus({ days: 1 });\n    date = yesterday.toFormat('dd.MM');\n    dateIso = yesterday.toFormat('yyyy-MM-dd');\n    requirements = (next[2] || '').trim();\n  }\n}\n\nreturn { json: { valid: true, error: '', platform, type, date, dateIso, requirements } };"
+      },
+      "id": "060daad4-705c-438c-bdd4-6399a0b98617",
+      "name": "Parse New Request",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        688,
+        928
+      ]
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "combinator": "and",
+          "conditions": [
+            {
+              "id": "valid-check",
+              "leftValue": "={{ $json.valid }}",
+              "operator": {
+                "operation": "true",
+                "singleValue": true,
+                "type": "boolean"
+              },
+              "rightValue": ""
+            }
+          ],
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict",
+            "version": 2
+          }
+        },
+        "options": {}
+      },
+      "id": "f8764a01-cac6-4e85-a826-15860f723643",
+      "name": "Is Request Valid",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.2,
+      "position": [
+        912,
+        928
+      ]
+    },
+    {
+      "parameters": {
+        "documentId": {
+          "__rl": true,
+          "mode": "id",
+          "value": "YOUR_GOOGLE_SHEET_ID"
+        },
+        "sheetName": {
+          "__rl": true,
+          "cachedResultName": "Відгуки",
+          "mode": "list",
+          "value": "0"
+        },
+        "options": {
+          "dataLocationOnSheet": {
+            "values": {
+              "rangeDefinition": "specifyRangeA1",
+              "range": "A4:A"
+            }
+          }
+        }
+      },
+      "id": "c0339570-0f88-4776-a709-e0fb253d8189",
+      "name": "Get Last Row Number",
+      "type": "n8n-nodes-base.googleSheets",
+      "typeVersion": 4.7,
+      "position": [
+        1136,
+        832
+      ],
+      "alwaysOutputData": true,
+      "credentials": {
+        "googleSheetsOAuth2Api": {
+          "id": "YOUR_CREDENTIAL_ID",
+          "name": "Google Sheets account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "jsCode": "const numbers = $input.all()\n  .map((item) => Number(item.json['№']))\n  .filter((n) => Number.isFinite(n) && n > 0);\n\nconst number = (numbers.length ? Math.max(...numbers) : 0) + 1;\n\nreturn [{ json: { number } }];"
+      },
+      "id": "13a9ea42-ca67-464b-8902-89ebd4321d8a",
+      "name": "Calculate Next Number",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1360,
+        832
+      ]
+    },
+    {
+      "parameters": {
+        "operation": "append",
+        "documentId": {
+          "__rl": true,
+          "mode": "id",
+          "value": "YOUR_GOOGLE_SHEET_ID"
+        },
+        "sheetName": {
+          "__rl": true,
+          "cachedResultName": "Відгуки",
+          "mode": "list",
+          "value": "0"
+        },
+        "columns": {
+          "mappingMode": "defineBelow",
+          "schema": [
+            {
+              "canBeUsedToMatch": true,
+              "defaultMatch": false,
+              "display": true,
+              "displayName": "№",
+              "id": "№",
+              "required": false,
+              "type": "string"
+            },
+            {
+              "canBeUsedToMatch": true,
+              "defaultMatch": false,
+              "display": true,
+              "displayName": "Дата відгуку",
+              "id": "Дата відгуку",
+              "required": false,
+              "type": "string"
+            },
+            {
+              "canBeUsedToMatch": true,
+              "defaultMatch": false,
+              "display": true,
+              "displayName": "Платформа/Компанія",
+              "id": "Платформа/Компанія",
+              "required": false,
+              "type": "string"
+            },
+            {
+              "canBeUsedToMatch": true,
+              "defaultMatch": false,
+              "display": true,
+              "displayName": "Тип",
+              "id": "Тип",
+              "required": false,
+              "type": "string"
+            },
+            {
+              "canBeUsedToMatch": true,
+              "defaultMatch": false,
+              "display": true,
+              "displayName": "Вимоги проєкту/вакансії",
+              "id": "Вимоги проєкту/вакансії",
+              "required": false,
+              "type": "string"
+            },
+            {
+              "canBeUsedToMatch": true,
+              "defaultMatch": false,
+              "display": true,
+              "displayName": "Відповідь на резюме/СL/офер",
+              "id": "Відповідь на резюме/СL/офер",
+              "required": false,
+              "type": "string"
+            },
+            {
+              "canBeUsedToMatch": true,
+              "defaultMatch": false,
+              "display": true,
+              "displayName": "Тестове",
+              "id": "Тестове",
+              "required": false,
+              "type": "string"
+            },
+            {
+              "canBeUsedToMatch": true,
+              "defaultMatch": false,
+              "display": true,
+              "displayName": "Запрошення на співбесіду",
+              "id": "Запрошення на співбесіду",
+              "required": false,
+              "type": "string"
+            },
+            {
+              "canBeUsedToMatch": true,
+              "defaultMatch": false,
+              "display": true,
+              "displayName": "Офер",
+              "id": "Офер",
+              "required": false,
+              "type": "string"
+            }
+          ],
+          "value": {
+            "Вимоги проєкту/вакансії": "={{ $('Parse New Request').first().json.requirements }}",
+            "Відповідь на резюме/СL/офер": "FALSE",
+            "Дата відгуку": "={{ $('Parse New Request').first().json.dateIso }}",
+            "Запрошення на співбесіду": "FALSE",
+            "Офер": "FALSE",
+            "Платформа/Компанія": "={{ $('Parse New Request').first().json.platform }}",
+            "Тестове": "FALSE",
+            "Тип": "={{ $('Parse New Request').first().json.type }}",
+            "№": "={{ $json.number }}"
+          }
+        },
+        "options": {
+          "cellFormat": "USER_ENTERED",
+          "locationDefine": {
+            "values": {
+              "headerRow": 4
+            }
+          }
+        }
+      },
+      "id": "eff81ab9-fdd4-432e-9235-4bdf6169f511",
+      "name": "Append Application Row",
+      "type": "n8n-nodes-base.googleSheets",
+      "typeVersion": 4.7,
+      "position": [
+        1584,
+        832
+      ],
+      "credentials": {
+        "googleSheetsOAuth2Api": {
+          "id": "YOUR_CREDENTIAL_ID",
+          "name": "Google Sheets account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "chatId": "={{ $('Telegram Trigger').first().json.message.chat.id }}",
+        "text": "={{ 'Рядок ' + $('Calculate Next Number').first().json.number + ' створено (' + $('Parse New Request').first().json.platform + ', ' + $('Parse New Request').first().json.type + ', ' + $('Parse New Request').first().json.date + ').\\nНадішліть CL відповіддю на це повідомлення.' }}",
+        "additionalFields": {
+          "appendAttribution": false
+        }
+      },
+      "id": "d818a858-d835-4ec0-8458-9e2791c6e88a",
+      "name": "Confirm Row Created",
+      "type": "n8n-nodes-base.telegram",
+      "typeVersion": 1.2,
+      "position": [
+        1808,
+        832
+      ],
+      "credentials": {
+        "telegramApi": {
+          "id": "YOUR_CREDENTIAL_ID",
+          "name": "Telegram account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "chatId": "={{ $('Telegram Trigger').first().json.message.chat.id }}",
+        "text": "={{ $json.error }}",
+        "additionalFields": {
+          "appendAttribution": false
+        }
+      },
+      "id": "4d81d56a-51f8-41dc-8593-e783dd8dca34",
+      "name": "Send Error Message",
+      "type": "n8n-nodes-base.telegram",
+      "typeVersion": 1.2,
+      "position": [
+        1136,
+        1024
+      ],
+      "credentials": {
+        "telegramApi": {
+          "id": "YOUR_CREDENTIAL_ID",
+          "name": "Telegram account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "mode": "runOnceForEachItem",
+        "jsCode": "const reply = $json.message.reply_to_message || {};\nconst replyText = String(reply.text || '');\nconst cl = String($json.message.text || '').trim();\n\nconst match = replyText.match(/^Рядок (\\d+) створено/);\nconst fromBot = Boolean(reply.from && reply.from.is_bot);\n\nif (!match || !fromBot) {\n  return { json: { valid: false, error: 'Не знайшов номер рядка. Дайте reply на повідомлення \"Рядок N створено\"', rowNumber: null, cl } };\n}\n\nreturn { json: { valid: true, error: '', rowNumber: Number(match[1]), cl } };"
+      },
+      "id": "b7a8cbf4-8375-4349-a7f9-c798d8d4c710",
+      "name": "Parse CL Reply",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        688,
+        448
+      ]
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "combinator": "and",
+          "conditions": [
+            {
+              "id": "cl-valid-check",
+              "leftValue": "={{ $json.valid }}",
+              "operator": {
+                "operation": "true",
+                "singleValue": true,
+                "type": "boolean"
+              },
+              "rightValue": ""
+            }
+          ],
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict",
+            "version": 2
+          }
+        },
+        "options": {}
+      },
+      "id": "dc375891-f0e2-48c1-b569-bb4122abe71e",
+      "name": "Is CL Reply Valid",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.2,
+      "position": [
+        912,
+        448
+      ]
+    },
+    {
+      "parameters": {
+        "operation": "update",
+        "documentId": {
+          "__rl": true,
+          "mode": "id",
+          "value": "YOUR_GOOGLE_SHEET_ID"
+        },
+        "sheetName": {
+          "__rl": true,
+          "cachedResultName": "Відгуки",
+          "mode": "list",
+          "value": "0"
+        },
+        "columns": {
+          "mappingMode": "defineBelow",
+          "matchingColumns": [
+            "№"
+          ],
+          "schema": [
+            {
+              "canBeUsedToMatch": true,
+              "defaultMatch": false,
+              "display": true,
+              "displayName": "№",
+              "id": "№",
+              "required": false,
+              "type": "string"
+            },
+            {
+              "canBeUsedToMatch": false,
+              "defaultMatch": false,
+              "display": true,
+              "displayName": "Резюме + CL (для вакансії)\n/CL (до відгуку на проєкти)/офер ",
+              "id": "Резюме + CL (для вакансії)\n/CL (до відгуку на проєкти)/офер ",
+              "required": false,
+              "type": "string"
+            }
+          ],
+          "value": {
+            "Резюме + CL (для вакансії)\n/CL (до відгуку на проєкти)/офер ": "={{ $('Parse CL Reply').first().json.cl }}",
+            "№": "={{ $('Parse CL Reply').first().json.rowNumber }}"
+          }
+        },
+        "options": {
+          "cellFormat": "USER_ENTERED",
+          "locationDefine": {
+            "values": {
+              "headerRow": 4,
+              "firstDataRow": 5
+            }
+          }
+        }
+      },
+      "id": "7c95d2cb-2b21-492a-99a2-643231938113",
+      "name": "Update CL in Row",
+      "type": "n8n-nodes-base.googleSheets",
+      "typeVersion": 4.7,
+      "position": [
+        1584,
+        448
+      ],
+      "alwaysOutputData": true,
+      "credentials": {
+        "googleSheetsOAuth2Api": {
+          "id": "YOUR_CREDENTIAL_ID",
+          "name": "Google Sheets account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "documentId": {
+          "__rl": true,
+          "mode": "id",
+          "value": "YOUR_GOOGLE_SHEET_ID"
+        },
+        "sheetName": {
+          "__rl": true,
+          "cachedResultName": "Відгуки",
+          "mode": "list",
+          "value": "0"
+        },
+        "filtersUI": {
+          "values": [
+            {
+              "lookupColumn": "№",
+              "lookupValue": "={{ $json.rowNumber }}"
+            }
+          ]
+        },
+        "options": {
+          "dataLocationOnSheet": {
+            "values": {
+              "rangeDefinition": "specifyRangeA1",
+              "range": "A4:A"
+            }
+          }
+        }
+      },
+      "id": "b72099fd-502c-4da5-9fba-77941165486c",
+      "name": "Find CL Row",
+      "type": "n8n-nodes-base.googleSheets",
+      "typeVersion": 4.7,
+      "position": [
+        1136,
+        544
+      ],
+      "alwaysOutputData": true,
+      "credentials": {
+        "googleSheetsOAuth2Api": {
+          "id": "YOUR_CREDENTIAL_ID",
+          "name": "Google Sheets account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "combinator": "and",
+          "conditions": [
+            {
+              "id": "cl-row-found",
+              "leftValue": "={{ $json['№'] !== undefined && $json['№'] !== null && $json['№'] !== '' }}",
+              "operator": {
+                "operation": "true",
+                "singleValue": true,
+                "type": "boolean"
+              },
+              "rightValue": ""
+            }
+          ],
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict",
+            "version": 2
+          }
+        },
+        "options": {}
+      },
+      "id": "859b1c27-3e65-489e-8ebc-8d757323c2c2",
+      "name": "Is CL Row Found",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.2,
+      "position": [
+        1360,
+        544
+      ]
+    },
+    {
+      "parameters": {
+        "chatId": "={{ $('Telegram Trigger').first().json.message.chat.id }}",
+        "text": "={{ 'CL для рядка ' + $('Parse CL Reply').first().json.rowNumber + ' збережено.\\nНадішліть скрін відповіддю на це повідомлення.' }}",
+        "additionalFields": {
+          "appendAttribution": false
+        }
+      },
+      "id": "27cf1e73-764c-40a6-9284-92b68fc7259c",
+      "name": "Confirm CL Saved",
+      "type": "n8n-nodes-base.telegram",
+      "typeVersion": 1.2,
+      "position": [
+        1808,
+        448
+      ],
+      "credentials": {
+        "telegramApi": {
+          "id": "YOUR_CREDENTIAL_ID",
+          "name": "Telegram account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "chatId": "={{ $('Telegram Trigger').first().json.message.chat.id }}",
+        "text": "={{ $json.error }}",
+        "additionalFields": {
+          "appendAttribution": false
+        }
+      },
+      "id": "51773b4a-1da3-4202-9a2c-21e2323d0dc1",
+      "name": "Send CL Error Message",
+      "type": "n8n-nodes-base.telegram",
+      "typeVersion": 1.2,
+      "position": [
+        1136,
+        352
+      ],
+      "credentials": {
+        "telegramApi": {
+          "id": "YOUR_CREDENTIAL_ID",
+          "name": "Telegram account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "chatId": "={{ $('Telegram Trigger').first().json.message.chat.id }}",
+        "text": "={{ 'Не вдалося оновити рядок ' + $('Parse CL Reply').first().json.rowNumber + '. Перевірте, що рядок існує в таблиці.' }}",
+        "additionalFields": {
+          "appendAttribution": false
+        }
+      },
+      "id": "b84950f7-8a44-45ab-8710-df6a0c4b3cee",
+      "name": "Send Row Not Found Message",
+      "type": "n8n-nodes-base.telegram",
+      "typeVersion": 1.2,
+      "position": [
+        1584,
+        640
+      ],
+      "credentials": {
+        "telegramApi": {
+          "id": "YOUR_CREDENTIAL_ID",
+          "name": "Telegram account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "mode": "runOnceForEachItem",
+        "jsCode": "const msg = $json.message;\nconst reply = msg.reply_to_message || {};\nconst replyText = String(reply.text || '');\n\nconst match = replyText.match(/^(?:Рядок (\\d+) створено|CL для рядка (\\d+) збережено)/);\nconst fromBot = Boolean(reply.from && reply.from.is_bot);\n\nlet fileId = '';\nlet ext = '';\n\nif (msg.document) {\n  fileId = msg.document.file_id;\n  const name = String(msg.document.file_name || '');\n  const dot = name.lastIndexOf('.');\n  ext = dot >= 0 ? name.slice(dot + 1).toLowerCase() : '';\n  if (!ext) {\n    ext = String(msg.document.mime_type || '').split('/')[1] || 'bin';\n  }\n} else if (Array.isArray(msg.photo) && msg.photo.length) {\n  fileId = msg.photo[msg.photo.length - 1].file_id;\n  ext = 'jpg';\n}\n\nif (!match || !fromBot || !fileId) {\n  return { json: { valid: false, error: 'Не знайшов номер рядка. Дайте reply на повідомлення \"Рядок N створено\" або \"CL для рядка N збережено\" файлом або фото', rowNumber: null, fileId, fileName: '' } };\n}\n\nconst rowNumber = Number(match[1] || match[2]);\n\nreturn { json: { valid: true, error: '', rowNumber, fileId, fileName: rowNumber + '.' + ext } };"
+      },
+      "id": "8c743e98-a6fc-4d28-b31d-1edd2ef4d853",
+      "name": "Parse Screenshot Reply",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        688,
+        1312
+      ]
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "combinator": "and",
+          "conditions": [
+            {
+              "id": "shot-valid-check",
+              "leftValue": "={{ $json.valid }}",
+              "operator": {
+                "operation": "true",
+                "singleValue": true,
+                "type": "boolean"
+              },
+              "rightValue": ""
+            }
+          ],
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict",
+            "version": 2
+          }
+        },
+        "options": {}
+      },
+      "id": "b72bcbd0-23aa-4049-8c41-288839fc846e",
+      "name": "Is Screenshot Reply Valid",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.2,
+      "position": [
+        912,
+        1312
+      ]
+    },
+    {
+      "parameters": {
+        "chatId": "={{ $('Telegram Trigger').first().json.message.chat.id }}",
+        "text": "={{ $json.error }}",
+        "additionalFields": {
+          "appendAttribution": false
+        }
+      },
+      "id": "a594674a-ab87-46ef-91b2-4414fb9f678e",
+      "name": "Send Screenshot Error Message",
+      "type": "n8n-nodes-base.telegram",
+      "typeVersion": 1.2,
+      "position": [
+        1136,
+        1408
+      ],
+      "credentials": {
+        "telegramApi": {
+          "id": "YOUR_CREDENTIAL_ID",
+          "name": "Telegram account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "documentId": {
+          "__rl": true,
+          "mode": "id",
+          "value": "YOUR_GOOGLE_SHEET_ID"
+        },
+        "sheetName": {
+          "__rl": true,
+          "cachedResultName": "Відгуки",
+          "mode": "list",
+          "value": "0"
+        },
+        "filtersUI": {
+          "values": [
+            {
+              "lookupColumn": "№",
+              "lookupValue": "={{ $json.rowNumber }}"
+            }
+          ]
+        },
+        "options": {
+          "dataLocationOnSheet": {
+            "values": {
+              "rangeDefinition": "specifyRangeA1",
+              "range": "A4:A"
+            }
+          }
+        }
+      },
+      "id": "6dfcff4a-ded7-4010-bc6f-2aec52343462",
+      "name": "Find Screenshot Row",
+      "type": "n8n-nodes-base.googleSheets",
+      "typeVersion": 4.7,
+      "position": [
+        1136,
+        1216
+      ],
+      "alwaysOutputData": true,
+      "credentials": {
+        "googleSheetsOAuth2Api": {
+          "id": "YOUR_CREDENTIAL_ID",
+          "name": "Google Sheets account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "combinator": "and",
+          "conditions": [
+            {
+              "id": "shot-row-found",
+              "leftValue": "={{ $json['№'] !== undefined && $json['№'] !== null && $json['№'] !== '' }}",
+              "operator": {
+                "operation": "true",
+                "singleValue": true,
+                "type": "boolean"
+              },
+              "rightValue": ""
+            }
+          ],
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict",
+            "version": 2
+          }
+        },
+        "options": {}
+      },
+      "id": "fe3f0bea-f486-402a-ba7a-1836fc7deb13",
+      "name": "Is Screenshot Row Found",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.2,
+      "position": [
+        1360,
+        1216
+      ]
+    },
+    {
+      "parameters": {
+        "chatId": "={{ $('Telegram Trigger').first().json.message.chat.id }}",
+        "text": "={{ 'Не вдалося оновити рядок ' + $('Parse Screenshot Reply').first().json.rowNumber + '. Перевірте, що рядок існує в таблиці.' }}",
+        "additionalFields": {
+          "appendAttribution": false
+        }
+      },
+      "id": "95a305da-4a8d-4d0e-9035-2af1b2a06230",
+      "name": "Send Screenshot Row Not Found Message",
+      "type": "n8n-nodes-base.telegram",
+      "typeVersion": 1.2,
+      "position": [
+        1584,
+        1312
+      ],
+      "credentials": {
+        "telegramApi": {
+          "id": "YOUR_CREDENTIAL_ID",
+          "name": "Telegram account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "resource": "file",
+        "fileId": "={{ $('Parse Screenshot Reply').first().json.fileId }}",
+        "additionalFields": {}
+      },
+      "id": "86b67dbe-648f-4020-9f7a-0ec01ee1d8a1",
+      "name": "Download Screenshot",
+      "type": "n8n-nodes-base.telegram",
+      "typeVersion": 1.2,
+      "position": [
+        1584,
+        1120
+      ],
+      "credentials": {
+        "telegramApi": {
+          "id": "YOUR_CREDENTIAL_ID",
+          "name": "Telegram account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "name": "={{ $('Parse Screenshot Reply').first().json.fileName }}",
+        "driveId": {
+          "__rl": true,
+          "cachedResultName": "My Drive",
+          "mode": "list",
+          "value": "My Drive"
+        },
+        "folderId": {
+          "__rl": true,
+          "mode": "id",
+          "value": "YOUR_GOOGLE_DRIVE_FOLDER_ID"
+        },
+        "options": {}
+      },
+      "id": "5fcfe7d6-33a3-443e-9058-7e187037ab8c",
+      "name": "Upload Screenshot to Drive",
+      "type": "n8n-nodes-base.googleDrive",
+      "typeVersion": 3,
+      "position": [
+        1808,
+        1120
+      ],
+      "credentials": {
+        "googleDriveOAuth2Api": {
+          "id": "YOUR_CREDENTIAL_ID",
+          "name": "Google Drive account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "operation": "update",
+        "documentId": {
+          "__rl": true,
+          "mode": "id",
+          "value": "YOUR_GOOGLE_SHEET_ID"
+        },
+        "sheetName": {
+          "__rl": true,
+          "cachedResultName": "Відгуки",
+          "mode": "list",
+          "value": "0"
+        },
+        "columns": {
+          "mappingMode": "defineBelow",
+          "matchingColumns": [
+            "№"
+          ],
+          "schema": [
+            {
+              "canBeUsedToMatch": true,
+              "defaultMatch": false,
+              "display": true,
+              "displayName": "№",
+              "id": "№",
+              "required": false,
+              "type": "string"
+            },
+            {
+              "canBeUsedToMatch": false,
+              "defaultMatch": false,
+              "display": true,
+              "displayName": "Скріншот відгука на проєкт/вакансію/офер для клієнта/роботодавця",
+              "id": "Скріншот відгука на проєкт/вакансію/офер для клієнта/роботодавця",
+              "required": false,
+              "type": "string"
+            }
+          ],
+          "value": {
+            "Скріншот відгука на проєкт/вакансію/офер для клієнта/роботодавця": "={{ $json.webViewLink }}",
+            "№": "={{ $('Parse Screenshot Reply').first().json.rowNumber }}"
+          }
+        },
+        "options": {
+          "cellFormat": "USER_ENTERED",
+          "locationDefine": {
+            "values": {
+              "headerRow": 4,
+              "firstDataRow": 5
+            }
+          }
+        }
+      },
+      "id": "f6172d79-8c20-4106-beb9-f0bb2d939424",
+      "name": "Update Screenshot Link in Row",
+      "type": "n8n-nodes-base.googleSheets",
+      "typeVersion": 4.7,
+      "position": [
+        2032,
+        1120
+      ],
+      "credentials": {
+        "googleSheetsOAuth2Api": {
+          "id": "YOUR_CREDENTIAL_ID",
+          "name": "Google Sheets account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "chatId": "={{ $('Telegram Trigger').first().json.message.chat.id }}",
+        "text": "={{ 'Скрін для рядка ' + $('Parse Screenshot Reply').first().json.rowNumber + ' збережено. Відгук повністю заповнено.' }}",
+        "additionalFields": {
+          "appendAttribution": false
+        }
+      },
+      "id": "9fb636e6-cc15-483c-9817-d80c007e4f9c",
+      "name": "Confirm Screenshot Saved",
+      "type": "n8n-nodes-base.telegram",
+      "typeVersion": 1.2,
+      "position": [
+        2256,
+        1120
+      ],
+      "credentials": {
+        "telegramApi": {
+          "id": "YOUR_CREDENTIAL_ID",
+          "name": "Telegram account"
+        }
+      }
+    }
+  ],
+  "pinData": {},
+  "connections": {
+    "Telegram Trigger": {
+      "main": [
+        [
+          {
+            "node": "Route Message Type",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Route Message Type": {
+      "main": [
+        [
+          {
+            "node": "Parse Screenshot Reply",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Parse CL Reply",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Parse New Request",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Parse New Request": {
+      "main": [
+        [
+          {
+            "node": "Is Request Valid",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Is Request Valid": {
+      "main": [
+        [
+          {
+            "node": "Get Last Row Number",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Send Error Message",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Get Last Row Number": {
+      "main": [
+        [
+          {
+            "node": "Calculate Next Number",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Calculate Next Number": {
+      "main": [
+        [
+          {
+            "node": "Append Application Row",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Append Application Row": {
+      "main": [
+        [
+          {
+            "node": "Confirm Row Created",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Parse CL Reply": {
+      "main": [
+        [
+          {
+            "node": "Is CL Reply Valid",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Is CL Reply Valid": {
+      "main": [
+        [
+          {
+            "node": "Find CL Row",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Send CL Error Message",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Find CL Row": {
+      "main": [
+        [
+          {
+            "node": "Is CL Row Found",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Is CL Row Found": {
+      "main": [
+        [
+          {
+            "node": "Update CL in Row",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Send Row Not Found Message",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Update CL in Row": {
+      "main": [
+        [
+          {
+            "node": "Confirm CL Saved",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Parse Screenshot Reply": {
+      "main": [
+        [
+          {
+            "node": "Is Screenshot Reply Valid",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Is Screenshot Reply Valid": {
+      "main": [
+        [
+          {
+            "node": "Find Screenshot Row",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Send Screenshot Error Message",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Find Screenshot Row": {
+      "main": [
+        [
+          {
+            "node": "Is Screenshot Row Found",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Is Screenshot Row Found": {
+      "main": [
+        [
+          {
+            "node": "Download Screenshot",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Send Screenshot Row Not Found Message",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Download Screenshot": {
+      "main": [
+        [
+          {
+            "node": "Upload Screenshot to Drive",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Upload Screenshot to Drive": {
+      "main": [
+        [
+          {
+            "node": "Update Screenshot Link in Row",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Update Screenshot Link in Row": {
+      "main": [
+        [
+          {
+            "node": "Confirm Screenshot Saved",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "active": false,
+  "settings": {
+    "executionOrder": "v1",
+    "binaryMode": "separate",
+    "availableInMCP": true
+  },
+  "meta": {},
+  "nodeGroups": [],
+  "tags": []
+}
